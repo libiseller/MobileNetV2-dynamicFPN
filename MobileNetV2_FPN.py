@@ -186,13 +186,15 @@ class FPN(nn.Module):
         self.smooth1 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
         self.smooth2 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
 
-    def _make_layer(self, block, planes, num_blocks, stride):
-        strides = [stride] + [1] * (num_blocks - 1)
-        layers = []
-        for stride in strides:
-            layers.append(block(self.in_planes, planes, stride))
-            self.in_planes = planes * block.expansion
-        return nn.Sequential(*layers)  # * = unpacking
+    def _make_interverted_residual_block(self, expansion_factor, width_factor, n, stride):
+        interverted_residual_block = []
+        output_channel = int(width_factor * self.width_mult)
+        for i in range(n):
+            if i == 0:
+                stride = 1
+            interverted_residual_block.append(InvertedResidual(self.input_channel, output_channel, stride, expansion_factor))
+            self.input_channel = output_channel
+        return nn.Sequential(*interverted_residual_block)
 
     def _upsample_add(self, x, y):
         '''Upsample and add two feature maps.
