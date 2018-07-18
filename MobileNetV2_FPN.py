@@ -168,8 +168,9 @@ class FPN(nn.Module):
                                              for setting in self.interverted_residual_setting if setting['stride'] > 1])
 
         # Smooth layers
-        self.smooth1 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
-        self.smooth2 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
+        self.smooth_layers = nn.ModuleList([nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
+                                            for layer in self.lateral_layers])
+
 
     def _make_interverted_residual_block(self, expansion_factor, width_factor, n, stride):
         interverted_residual_block = []
