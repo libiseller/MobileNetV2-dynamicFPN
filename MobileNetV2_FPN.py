@@ -54,20 +54,6 @@ class InvertedResidual(nn.Module):
 class MobileNetV2_FPN(nn.Module):  # nn.Module is base class for nets
     def __init__(self, n_class=1000, input_size=224, width_mult=1.):
         super(MobileNetV2_FPN, self).__init__()
-        setting of inverted residual blocks
-        self.interverted_residual_setting = [
-            # t (expansion factor)
-            #    c (width factor)
-            #       n (number of InvertedResidual)
-            #          s (stride)
-            [1, 16, 1, 1],
-            [6, 24, 2, 2],
-            [6, 32, 3, 2],
-            [6, 64, 4, 2],
-            [6, 96, 3, 1],
-            [6, 160, 3, 2],
-            [6, 320, 1, 1],
-        ]
 
         # building first layer
         assert input_size % 32 == 0
@@ -181,6 +167,16 @@ class FPN(nn.Module):
 
         # Top-down layers
         self.toplayer = nn.Conv2d(2048, 256, kernel_size=1, stride=1, padding=0)
+        # Inverted residual blocks
+        self.interverted_residual_setting = [
+            {'expansion_factor': 1, 'width_factor': 16, 'n': 1, 'stride': 1},
+            {'expansion_factor': 6, 'width_factor': 24, 'n': 2, 'stride': 2},
+            {'expansion_factor': 6, 'width_factor': 32, 'n': 3, 'stride': 2},
+            {'expansion_factor': 6, 'width_factor': 64, 'n': 4, 'stride': 2},
+            {'expansion_factor': 6, 'width_factor': 96, 'n': 3, 'stride': 1},
+            {'expansion_factor': 6, 'width_factor': 160, 'n': 3, 'stride': 2},
+            {'expansion_factor': 6, 'width_factor': 320, 'n': 1, 'stride': 1},
+        ]
 
         # Lateral layers
         self.latlayer1 = nn.Conv2d(1024, 256, kernel_size=1, stride=1, padding=0)
