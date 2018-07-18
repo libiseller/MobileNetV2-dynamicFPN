@@ -163,8 +163,9 @@ class FPN(nn.Module):
 
 
         # Lateral layers
-        self.latlayer1 = nn.Conv2d(1024, 256, kernel_size=1, stride=1, padding=0)
-        self.latlayer2 = nn.Conv2d(512, 256, kernel_size=1, stride=1, padding=0)
+        # only needed if resulution decreases (stride > 1)
+        self.lateral_layers = nn.ModuleList([nn.Conv2d(setting['width_factor'], 256, kernel_size=1, stride=1, padding=0)
+                                             for setting in self.interverted_residual_setting if setting['stride'] > 1])
 
         # Smooth layers
         self.smooth1 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
