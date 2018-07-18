@@ -3,8 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-# Mobile Net V2
-
 
 def conv_bn(inp, oup, stride):  # convolution + batchnorm
     return nn.Sequential(
@@ -57,97 +55,10 @@ class MobileNetV2_FPN(nn.Module):  # nn.Module is base class for nets
 
         # building first layer
         assert input_size % 32 == 0
-        input_channel = int(32 * width_mult)
-        self.last_channel = int(1280 * width_mult) if width_mult > 1.0 else 1280
-        self.features = [conv_bn(3, input_channel, 2)]
-        # Not sure if I need this
-        # building last several layers
-        self.features.append(conv_1x1_bn(input_channel, self.last_channel))
-        self.features.append(nn.AvgPool2d(input_size / 32))
-        # make it nn.Sequential
-        self.features = nn.Sequential(*self.features)  # * = unpacking
+        self.input_channel = int(32 * width_mult)
+        self.width_mult = width_mult
+        self.first_layer = conv_bn(3, self.input_channel, 2)
 
-        # # building classifier
-        # self.classifier = nn.Sequential(
-        #     nn.Dropout(),
-        #     nn.Linear(self.last_channel, n_class),
-        # )
-
-        self._initialize_weights()
-
-    def forward(self, x):
-        x = self.features(x)
-        x = x.view(-1, self.last_channel)  # reshape: rows = undefined, columns = as last channel
-        x = self.classifier(x)
-        # return x
-        # return p3, p4, p5, p6, p7, p8, p9
-
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-                if m.bias is not None:
-                    m.bias.data.zero_()
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-            elif isinstance(m, nn.Linear):
-                n = m.weight.size(1)
-                m.weight.data.normal_(0, 0.01)
-                m.bias.data.zero_()
-
-# FPN
-
-
-class Bottleneck(nn.Module):
-    expansion = 4
-
-    def __init__(self, in_planes, planes, stride=1):
-        super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, self.expansion * planes, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(self.expansion * planes)
-
-        self.downsample = nn.Sequential()
-        if stride != 1 or in_planes != self.expansion * planes:
-            self.downsample = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion * planes)
-            )
-
-    def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = F.relu(self.bn2(self.conv2(out)))
-        out = self.bn3(self.conv3(out))
-        out += self.downsample(x)
-        out = F.relu(out)
-        return out
-
-
-class FPN(nn.Module):
-    def __init__(self, block, num_blocks):  # block = bottleneckmodule?
-        super(FPN, self).__init__()
-        self.in_planes = 64
-
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
-
-        # Bottom-up layers
-        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
-        self.conv6 = nn.Conv2d(2048, 256, kernel_size=3, stride=2, padding=1)
-        self.conv7 = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)
-        self.conv8 = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)
-        self.conv9 = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)
-
-        # Top-down layers
-        self.toplayer = nn.Conv2d(2048, 256, kernel_size=1, stride=1, padding=0)
         # Inverted residual blocks
         self.interverted_residual_setting = [
             {'expansion_factor': 1, 'width_factor': 16, 'n': 1, 'stride': 1},
@@ -161,6 +72,8 @@ class FPN(nn.Module):
         self.inverted_residual_blocks = nn.ModuleList([self._make_interverted_residual_block(**setting)
                                                        for setting in self.interverted_residual_setting])
 
+        # Top down layers
+        self.toplayer = nn.Conv2d(320, 256, kernel_size=1, stride=1, padding=0)
 
         # Lateral layers
         # only needed if resulution decreases (stride > 1)
@@ -171,6 +84,9 @@ class FPN(nn.Module):
         self.smooth_layers = nn.ModuleList([nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1)
                                             for layer in self.lateral_layers])
 
+        self.last_channel = int(1280 * width_mult) if width_mult > 1.0 else 1280
+
+        self._initialize_weights()
 
     def _make_interverted_residual_block(self, expansion_factor, width_factor, n, stride):
         interverted_residual_block = []
@@ -201,6 +117,21 @@ class FPN(nn.Module):
         _, _, H, W = y.size()
         return F.upsample(x, size=(H, W), mode='bilinear', align_corners=False) + y
 
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                if m.bias is not None:
+                    m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                n = m.weight.size(1)
+                m.weight.data.normal_(0, 0.01)
+                m.bias.data.zero_()
+
     def forward(self, x):
         # Bottom-up
         c1 = F.relu(self.bn1(self.conv1(x)))
@@ -222,20 +153,14 @@ class FPN(nn.Module):
         return p3, p4, p5, p6, p7, p8, p9
 
 
-def FPN50():
-    return FPN(Bottleneck, [3, 4, 6, 3])
-
-
-def FPN101():
-    return FPN(Bottleneck, [3, 4, 23, 3])
-
-
-def FPN152():
-    return FPN(Bottleneck, [3, 8, 36, 3])
-
-
 def test():
-    net = FPN50()
+    net = MobileNetV2_FPN()
     fms = net(torch.randn(1, 3, 512, 512))
     for fm in fms:
         print(fm.size())
+
+
+test()
+
+# net = MobileNetV2_FPN()
+# print(net)
