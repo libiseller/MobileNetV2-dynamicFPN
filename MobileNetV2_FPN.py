@@ -60,25 +60,6 @@ class MobileNetV2_FPN(nn.Module):  # nn.Module is base class for nets
         input_channel = int(32 * width_mult)
         self.last_channel = int(1280 * width_mult) if width_mult > 1.0 else 1280
         self.features = [conv_bn(3, input_channel, 2)]
-        # building inverted residual blocks
-        for t, c, n, s in self.interverted_residual_setting:
-            output_channel = int(c * width_mult)
-            for i in range(n):
-                if i == 0:
-                    self.features.append(InvertedResidual(input_channel, output_channel, s, t))  # stride s
-                else:
-                    self.features.append(InvertedResidual(input_channel, output_channel, 1, t))  # stride 1
-                input_channel = output_channel
-
-            #############################
-            # Insert lateral connection
-            # make sure they 1/2 in resolution every block
-            #############################
-
-        #############################
-        # Insert top layer and top down layers
-        #############################
-
         # Not sure if I need this
         # building last several layers
         self.features.append(conv_1x1_bn(input_channel, self.last_channel))
@@ -177,6 +158,9 @@ class FPN(nn.Module):
             {'expansion_factor': 6, 'width_factor': 160, 'n': 3, 'stride': 2},
             {'expansion_factor': 6, 'width_factor': 320, 'n': 1, 'stride': 1},
         ]
+        self.inverted_residual_blocks = nn.ModuleList([self._make_interverted_residual_block(**setting)
+                                                       for setting in self.interverted_residual_setting])
+
 
         # Lateral layers
         self.latlayer1 = nn.Conv2d(1024, 256, kernel_size=1, stride=1, padding=0)
