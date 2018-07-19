@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import math
 
@@ -81,7 +82,7 @@ class MobileNetV2(nn.Module):  # nn.Module is base class for all Nets
                 input_channel = output_channel
         # building last several layers
         self.features.append(conv_1x1_bn(input_channel, self.last_channel))
-        self.features.append(nn.AvgPool2d(input_size / 32))
+        self.features.append(nn.AvgPool2d(int(input_size / 32)))
         # make it nn.Sequential
         self.features = nn.Sequential(*self.features)  # * = unpacking
 
@@ -115,9 +116,12 @@ class MobileNetV2(nn.Module):  # nn.Module is base class for all Nets
                 m.bias.data.zero_()
 
 
-net = MobileNetV2()
-print('-' * 80)
-print(net)
-print('-' * 80)
-for i, weights in enumerate(list(net.parameters())):
-    print('i:', i, 'weights:', weights.size())
+def test():
+    net = MobileNetV2()
+    print(net)
+    fms = net(torch.randn(1, 3, 512, 512))
+    for fm in fms:
+        print(fm)
+
+
+test()
