@@ -72,10 +72,9 @@ class MobileNetV2_dynamicFPN(nn.Module):
 
         # Lateral layers
         # exclude last setting as this lateral connection is the the top layer
-        # only if resulution decreases (stride > 1)
+        # build layer only if resulution has decreases (stride > 1)
         self.lateral_setting = [setting for setting in self.inverted_residual_setting[:-1]
                                 if setting['stride'] > 1]
-        # self.lateral_setting.reverse()  # top down part of FPN is in reverse order
         self.lateral_layers = nn.ModuleList([
             nn.Conv2d(int(setting['width_factor'] * self.width_mult),
                       256, kernel_size=1, stride=1, padding=0)
@@ -90,10 +89,11 @@ class MobileNetV2_dynamicFPN(nn.Module):
 
     def _make_inverted_residual_block(self, expansion_factor, width_factor, n, stride):
         inverted_residual_block = []
-        output_channel = int(width_factor * self.width_mult)  # if width_mult=1,  out = width_factor
+        output_channel = int(width_factor * self.width_mult)
         for i in range(n):
+            # except the first layer, all layers have stride 1
             if i != 0:
-                stride = 1  # except the first layer, all layers have stride 1
+                stride = 1
             inverted_residual_block.append(
                 InvertedResidual(self.input_channel, output_channel, stride, expansion_factor))
             self.input_channel = output_channel
@@ -140,6 +140,7 @@ class MobileNetV2_dynamicFPN(nn.Module):
 
         # loop through inverted_residual_blocks (mobile_netV2)
         # save lateral_connections to lateral_tensors
+        # track how many lateral connections have been made
         lateral_tensors = []
         n_lateral_connections = 0
         for i, block in enumerate(self.inverted_residual_blocks):
@@ -152,11 +153,12 @@ class MobileNetV2_dynamicFPN(nn.Module):
 
         # connect m_layer with previous m_layer and lateral layers recursively
         m_layers = [self.top_layer(x)]
-        lateral_tensors.reverse()  # reverse lateral tensor order for top down
+        # reverse lateral tensor order for top down
+        lateral_tensors.reverse()
         for lateral_tensor in lateral_tensors:
             m_layers.append(self._upsample_add(m_layers[-1], lateral_tensor))
 
-        # smooth all m layers
+        # smooth all m_layers
         assert len(self.smooth_layers) == len(m_layers)
         p_layers = [smooth_layer(m_layer) for smooth_layer, m_layer in zip(self.smooth_layers, m_layers)]
 
@@ -165,10 +167,10 @@ class MobileNetV2_dynamicFPN(nn.Module):
 
 def test():
     net = MobileNetV2_dynamicFPN()
-    # print(net)
+    print(net)
     output = net(torch.randn(1, 3, 512, 512))
-    for featuremap in output:
-        print(featuremap.size())
+    for feature_map in output:
+        print(feature_map.size())
 
 
 test()
