@@ -64,6 +64,10 @@ class MobileNetV2_dynamicFPN(nn.Module):
             [self._make_inverted_residual_block(**setting)
              for setting in self.inverted_residual_setting])
 
+        # reduce feature maps to one pixel
+        # allows to upsample semantic information of every part of the image
+        self.average_pool = nn.AdaptiveAvgPool2d(1)
+
         # Top layer
         # input channels = last width factor
         self.top_layer = nn.Conv2d(
@@ -150,6 +154,8 @@ class MobileNetV2_dynamicFPN(nn.Module):
                 lateral_tensors.append(self.lateral_layers[n_lateral_connections](output))
                 n_lateral_connections += 1
             x = output
+
+        x = self.average_pool(x)
 
         # connect m_layer with previous m_layer and lateral layers recursively
         m_layers = [self.top_layer(x)]
